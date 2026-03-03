@@ -1,0 +1,11 @@
+version: 1.0.0
+files:
+  - url: Earth-Defense-Net-1.0.0-arm64-mac.zip
+    sha512: YWYZxKIXolXm2FfAjkmP32hgc9G+dn5HAPteS6SukT2k+Unkkt5Us0Wr5lS1pHbvMRsS9CNr+zaRf+HxLAx7ew==
+    size: 100190893
+  - url: Earth-Defense-Net-1.0.0-arm64.dmg
+    sha512: NOG2oAdcSqbZXb0/K2Z5NApQ0F+Jhg7+IYUL8H2WGGZCagpAttD/WxB2OpRL1KAFisslxuaHqZHTyfqiPxCTYw==
+    size: 103515061
+path: Earth-Defense-Net-1.0.0-arm64-mac.zip
+sha512: YWYZxKIXolXm2FfAjkmP32hgc9G+dn5HAPteS6SukT2k+Unkkt5Us0Wr5lS1pHbvMRsS9CNr+zaRf+HxLAx7ew==
+releaseDate: '2026-03-03T21:28:35.379Z'

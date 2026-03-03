@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, BookOpen, Radio, Volume2, VolumeX } from 'lucide-react';
+import { CheckCircle, XCircle, BookOpen, Radio, Volume2, VolumeX } from 'lucide-react';
 import { useGameAudio } from './useGameAudio';
 
 // Types
@@ -62,6 +62,16 @@ const CyberInspector = () => {
   const [highestDay, setHighestDay] = useState(1);
   const [highestScore, setHighestScore] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [showDevConsole, setShowDevConsole] = useState(false);
+  const [devLogs, setDevLogs] = useState<string[]>([]);
+
+  // Developer console logging
+  const devLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    setDevLogs(prev => [...prev.slice(-99), logEntry]); // Keep last 100 logs
+    console.log(logEntry);
+  };
 
   // Load high scores on mount
   useEffect(() => {
@@ -227,9 +237,9 @@ const CyberInspector = () => {
   };
 
   const validEmployeeIDs: { [key: string]: string[] } = {
-    Human: ["H-29481", "H-84721", "H-19203", "H-55847"],
-    Andromedan: ["A-73829", "A-29481", "A-10293"],
-    Pleiadian: ["P-11203", "P-93847", "P-20194"]
+    Human: ["H-29481", "H-84721", "H-19203", "H-55847", "H-12093", "H-64821", "H-38471", "H-92847", "H-47382", "H-58392"],
+    Andromedan: ["A-73829", "A-29481", "A-10293", "A-49321", "A-58291", "A-71938", "A-39284", "A-82947"],
+    Pleiadian: ["P-11203", "P-93847", "P-20194", "P-48291", "P-73921", "P-29384", "P-58473", "P-73845"]
   };
 
   const protocolInfo: { [key: string]: { title: string; description: string; whatToLookFor: string[] } } = {
@@ -301,10 +311,10 @@ const CyberInspector = () => {
       title: "SSL Certificate Validation",
       description: "SSL certificates verify identity and enable encrypted connections. Expired or soon-to-expire certificates are security vulnerabilities.",
       whatToLookFor: [
-        "Current date in game: 2087-06-15",
+        "Current date in game: 15/06/2087",
         "Block certificates that expired before today",
         "Block certificates expiring within 7 days (security policy)",
-        "Example expired: 2087-06-08, Example expiring soon: 2087-06-20",
+        "Example expired: 08/06/2087, Example expiring soon: 20/06/2087",
         "Real-world equivalent: HTTPS certificates, certificate pinning, expiration monitoring"
       ]
     },
@@ -331,15 +341,18 @@ const CyberInspector = () => {
   };
 
   const generateTransmission = (currentDay: number): TransmissionCase => {
+    devLog(`Generating transmission for Day ${currentDay}`);
     const dayRules = rules[Math.min(currentDay, 7)];
     const activeChecks = dayRules.activeChecks;
     
     // Pick a random check to potentially violate
     const errorCheck = Math.random() < 0.5 ? null : activeChecks[Math.floor(Math.random() * activeChecks.length)];
+    devLog(`Error check: ${errorCheck || 'none (valid transmission)'}`);
     
     // Pick species (with chance of hostile Zorgon)
     const speciesOptions = errorCheck === 'species' ? ["Zorgon"] : ["Human", "Andromedan", "Pleiadian"];
     const species = speciesOptions[Math.floor(Math.random() * speciesOptions.length)];
+    devLog(`Generated species: ${species}`);
     
     const from = senderNames[species][Math.floor(Math.random() * senderNames[species].length)];
     const to = destinations[Math.floor(Math.random() * destinations.length)];
@@ -387,11 +400,21 @@ const CyberInspector = () => {
     
     // IP Address
     let sourceIP = "";
+    let intentionalIPMismatch = false;
     if (activeChecks.includes('ip')) {
       if (errorCheck === 'ip') {
         sourceIP = "66.6." + Math.floor(Math.random() * 256) + "." + Math.floor(Math.random() * 256);
       } else {
-        if (species === "Human") {
+        // 15% chance of IP/species mismatch (advanced threat detection)
+        let ipSpecies = species;
+        if (currentDay >= 4 && Math.random() < 0.15) {
+          const otherSpecies = ["Human", "Andromedan", "Pleiadian"].filter(s => s !== species);
+          ipSpecies = otherSpecies[Math.floor(Math.random() * otherSpecies.length)];
+          intentionalIPMismatch = true;
+          devLog(`⚠️ INTENTIONAL MISMATCH: Claiming ${species} but using ${ipSpecies} IP`);
+        }
+        
+        if (ipSpecies === "Human") {
           const ranges = ["10.", "172.", "192.168."];
           const range = ranges[Math.floor(Math.random() * ranges.length)];
           if (range === "10.") {
@@ -401,9 +424,9 @@ const CyberInspector = () => {
           } else {
             sourceIP = range + Math.floor(Math.random() * 256) + "." + Math.floor(Math.random() * 256);
           }
-        } else if (species === "Andromedan") {
+        } else if (ipSpecies === "Andromedan") {
           sourceIP = "203." + Math.floor(Math.random() * 256) + "." + Math.floor(Math.random() * 256) + "." + Math.floor(Math.random() * 256);
-        } else if (species === "Pleiadian") {
+        } else if (ipSpecies === "Pleiadian") {
           sourceIP = "198." + Math.floor(Math.random() * 256) + "." + Math.floor(Math.random() * 256) + "." + Math.floor(Math.random() * 256);
         } else {
           sourceIP = "66.6." + Math.floor(Math.random() * 256) + "." + Math.floor(Math.random() * 256);
@@ -437,7 +460,14 @@ const CyberInspector = () => {
     let packetHash = "";
     if (activeChecks.includes('hash')) {
       if (errorCheck === 'hash') {
-        const invalidHashes = ["HASH_MISMATCH", "a1b2c3d4e5f6", "ZZZZ"];
+        // Mix of obvious and subtle errors
+        const invalidHashes = [
+          "HASH_MISMATCH", 
+          "a1b2c3d4e5f6", 
+          "ZZZZ",
+          // Half-length hashes (32 chars instead of 64) - harder to spot
+          Array.from({length: 32}, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join('')
+        ];
         packetHash = invalidHashes[Math.floor(Math.random() * invalidHashes.length)];
       } else {
         const hexChars = "0123456789abcdef";
@@ -449,9 +479,12 @@ const CyberInspector = () => {
     let employeeID = "";
     if (activeChecks.includes('employeeID') && species !== "Zorgon") {
       if (errorCheck === 'employeeID') {
+        // Generate invalid ID (not in database)
         const prefix = species === "Human" ? "H-" : species === "Andromedan" ? "A-" : "P-";
         employeeID = prefix + Math.floor(Math.random() * 90000 + 10000);
       } else {
+        // Generate valid ID (IN database, but NOT the displayed examples)
+        // Use IDs from the expanded database
         employeeID = validEmployeeIDs[species][Math.floor(Math.random() * validEmployeeIDs[species].length)];
       }
     }
@@ -460,10 +493,10 @@ const CyberInspector = () => {
     let sslExpiry = "";
     if (activeChecks.includes('ssl')) {
       if (errorCheck === 'ssl') {
-        const badDates = ["2087-06-10", "2087-06-08", "2087-05-20"];
+        const badDates = ["10/06/2087", "08/06/2087", "20/05/2087"];
         sslExpiry = badDates[Math.floor(Math.random() * badDates.length)];
       } else {
-        const validDates = ["2088-01-15", "2087-12-20", "2087-09-30", "2087-08-10"];
+        const validDates = ["15/01/2088", "20/12/2087", "30/09/2087", "10/08/2087"];
         sslExpiry = validDates[Math.floor(Math.random() * validDates.length)];
       }
     }
@@ -510,9 +543,26 @@ const CyberInspector = () => {
     } else if (activeChecks.includes('employeeID') && employeeID && !validEmployeeIDs[species].includes(employeeID)) {
       correctAction = "block";
       reason = "Employee ID not found in registered database";
+    } else if (activeChecks.includes('ip') && species !== "Zorgon" && sourceIP) {
+      // Check if IP range matches claimed species
+      const isHumanIP = sourceIP.startsWith("10.") || sourceIP.startsWith("172.") || sourceIP.startsWith("192.168.");
+      const isAndromedanIP = sourceIP.startsWith("203.");
+      const isPleiadianIP = sourceIP.startsWith("198.");
+      
+      let ipMatchesSpecies = false;
+      if (species === "Human" && isHumanIP) ipMatchesSpecies = true;
+      if (species === "Andromedan" && isAndromedanIP) ipMatchesSpecies = true;
+      if (species === "Pleiadian" && isPleiadianIP) ipMatchesSpecies = true;
+      
+      if (!ipMatchesSpecies) {
+        correctAction = "block";
+        reason = `IP address range doesn't match claimed ${species} species (possible spoofing)`;
+      }
     } else if (activeChecks.includes('ssl') && sslExpiry) {
-      const expiryDate = new Date(sslExpiry);
-      const currentDate = new Date("2087-06-15");
+      // Parse DD/MM/YYYY format
+      const [day, month, year] = sslExpiry.split('/').map(Number);
+      const expiryDate = new Date(year, month - 1, day);
+      const currentDate = new Date(2087, 5, 15); // June 15, 2087
       const daysUntilExpiry = Math.floor((expiryDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
       
       if (daysUntilExpiry < 0) {
@@ -543,23 +593,57 @@ const CyberInspector = () => {
       correctAction,
       reason
     };
+    
+    devLog(`Correct action: ${correctAction} - ${reason}`);
+    return {
+      day: currentDay,
+      type: "Transmission",
+      from,
+      to,
+      species,
+      content,
+      dnaSig,
+      authCode,
+      category,
+      encryption,
+      sourceIP,
+      port,
+      packetHash,
+      employeeID,
+      sslExpiry,
+      correctAction,
+      reason
+    };
   };
 
   useEffect(() => {
-    if (gameState === 'playing' && timer > 0 && !isPaused) {
+    if (gameState === 'playing' && !isPaused && currentCase) {
       const interval = setInterval(() => {
-        setTimer((t: number) => t - 1);
+        setTimer((t: number) => {
+          const newTime = t - 1;
+          
+          if (newTime <= 0) {
+            // Auto-deny if time runs out
+            handleDecision('block');
+            return 90;
+          }
+          return newTime;
+        });
       }, 1000);
       return () => clearInterval(interval);
-    } else if (timer === 0 && gameState === 'playing') {
-      endDay();
     }
-  }, [timer, gameState, isPaused]);
+  }, [gameState, isPaused, currentCase]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (gameState === 'playing' && e.key === 'Escape') {
         setIsPaused(p => !p);
+      }
+      // Toggle developer console with F12
+      if (e.key === 'F12') {
+        e.preventDefault();
+        setShowDevConsole(prev => !prev);
+        devLog('Developer console toggled');
       }
     };
     
@@ -568,6 +652,7 @@ const CyberInspector = () => {
   }, [gameState]);
 
   const startGame = () => {
+    devLog('=== GAME STARTED ===');
     setGameState('playing');
     setDay(1);
     setScore(0);
@@ -580,12 +665,15 @@ const CyberInspector = () => {
   };
 
   const loadNextCase = () => {
+    devLog('Loading next transmission...');
     const newCase = generateTransmission(day);
     setCurrentCase(newCase);
   };
 
   const handleDecision = (action: string) => {
     if (!currentCase) return;
+    
+    devLog(`Player chose: ${action.toUpperCase()}`);
 
     // Play button click sound
     if (action === 'allow') {
@@ -597,9 +685,38 @@ const CyberInspector = () => {
     const correct = action === currentCase.correctAction;
     const points = correct ? 15 : -15;
     const safetyChange = correct ? 5 : -20; // Much harsher penalty for wrong answers
+    
+    devLog(`${correct ? '✓ CORRECT' : '✗ WRONG'} | Points: ${points >= 0 ? '+' : ''}${points} | Safety: ${safetyChange >= 0 ? '+' : ''}${safetyChange}%`);
 
-    setScore((s: number) => s + points);
-    setHumanitySafety((r: number) => Math.max(0, Math.min(100, r + safetyChange)));
+    setScore((s: number) => {
+      const newScore = s + points;
+      
+      // Update high score immediately
+      if (newScore > highestScore) {
+        setHighestScore(newScore);
+        try {
+          localStorage.setItem('highestScore', newScore.toString());
+        } catch (error) {
+          console.warn('Could not save high score');
+        }
+      }
+      
+      return newScore;
+    });
+    setHumanitySafety((r: number) => {
+      const newSafety = Math.max(0, Math.min(100, r + safetyChange));
+      
+      // Immediate game over at 0%
+      if (newSafety <= 0) {
+        setTimeout(() => {
+          audio.playSound('gameOver');
+          audio.stopMusic();
+          setGameState('ended');
+        }, 3000); // Wait for feedback to show, then end game
+      }
+      
+      return newSafety;
+    });
     setProcessedToday((p: number) => p + 1);
 
     // Trigger visual effects
@@ -626,6 +743,10 @@ const CyberInspector = () => {
 
     setTimeout(() => {
       setFeedback(null);
+      
+      // Check if game is already over (safety hit 0)
+      if (gameState === 'ended') return;
+      
       if (processedToday >= 2) {
         endDay();
       } else {
@@ -636,14 +757,31 @@ const CyberInspector = () => {
 
   const endDay = () => {
     if (humanitySafety <= 0) {
+      devLog('=== GAME OVER - Earth Safety: 0% ===');
       // Update high scores
       updateHighScores();
       audio.stopMusic();
       audio.playSound('gameOver');
       setGameState('ended');
     } else {
+      devLog(`=== DAY ${day} COMPLETE ===`);
+      devLog(`Score: ${score} | Safety: ${humanitySafety}% | Advancing to Day ${day + 1}`);
       audio.playSound('dayChange');
-      setDay((d: number) => d + 1);
+      setDay((d: number) => {
+        const newDay = d + 1;
+        
+        // Update highest day immediately
+        if (newDay > highestDay) {
+          setHighestDay(newDay);
+          try {
+            localStorage.setItem('highestDay', newDay.toString());
+          } catch (error) {
+            console.warn('Could not save highest day');
+          }
+        }
+        
+        return newDay;
+      });
       setProcessedToday(0);
       setTimer(90);
       setTimeout(() => {
@@ -847,10 +985,11 @@ const CyberInspector = () => {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-900 via-blue-900 to-gray-900 text-cyan-400 p-8 font-mono">
         <div className="max-w-2xl mx-auto text-center">
-          <div className="text-red-400">
+          <div className="text-cyan-400">
             <h1 className="text-4xl font-bold mb-4">
-              ✗ DEFENSE GRID FAILED
+              📡 MISSION COMPLETE
             </h1>
+            <p className="text-xl text-gray-400 mb-4">Defense Grid Offline</p>
           </div>
           <div className="bg-gray-800 border-2 border-cyan-500 p-6 rounded-lg mb-8">
             <div className="text-2xl mb-4">Mission Report</div>
@@ -875,8 +1014,8 @@ const CyberInspector = () => {
               </p>
             )}
             {day < 7 && (
-              <p className="mt-4 text-red-400">
-                Training incomplete. Hostile forces breached defenses on Day {day}.
+              <p className="mt-4 text-cyan-400">
+                Training in progress. Reached Day {day} - keep practicing!
               </p>
             )}
           </div>
@@ -894,8 +1033,8 @@ const CyberInspector = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-blue-900 to-gray-900 text-cyan-400 p-4 font-mono">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-gray-800 border-2 border-cyan-500 p-4 rounded-lg mb-4 flex items-center justify-between">
+        {/* Header - Sticky */}
+        <div className="bg-gray-800 border-2 border-cyan-500 p-4 rounded-lg mb-4 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <Radio size={24} className="animate-pulse" />
@@ -922,10 +1061,6 @@ const CyberInspector = () => {
               <div className="text-purple-300">🏆 BEST DAY: {highestDay}</div>
               <div className="text-purple-300">⭐ BEST SCORE: {highestScore}</div>
             </div>
-            <div className="flex items-center gap-2">
-              <Clock size={20} />
-              <span className={timer < 20 ? 'text-red-400 animate-pulse' : ''}>{timer}s</span>
-            </div>
             <button
               onClick={() => {
                 const muted = audio.toggleMute();
@@ -945,6 +1080,7 @@ const CyberInspector = () => {
             </button>
           </div>
         </div>
+
 
         <style>{`
           @keyframes shake {
@@ -1031,6 +1167,38 @@ const CyberInspector = () => {
           </div>
         )}
 
+        {/* Dynamite Fuse Timer Bar */}
+        {gameState === 'playing' && (
+          <div className="mb-4">
+            <div className="bg-gray-900 border-2 border-orange-600 rounded-lg p-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-orange-500 font-bold text-sm">💣 TIME PRESSURE</span>
+                <span className="text-gray-400 text-xs">{timer}s remaining</span>
+              </div>
+              <div className="relative h-6 bg-gray-800 rounded-full overflow-hidden border border-orange-800">
+                {/* Fuse bar that shrinks from right to left */}
+                <div 
+                  className={`absolute top-0 right-0 h-full transition-all duration-1000 ${
+                    timer <= 10 ? 'bg-gradient-to-l from-red-600 via-orange-600 to-yellow-500 animate-pulse' :
+                    timer <= 30 ? 'bg-gradient-to-l from-orange-600 via-yellow-500 to-orange-400' :
+                    'bg-gradient-to-l from-yellow-500 via-orange-400 to-yellow-300'
+                  }`}
+                  style={{ width: `${(timer / 90) * 100}%` }}
+                >
+                  {/* Sparkle effect on the fuse */}
+                  <div className="absolute right-0 top-0 bottom-0 w-2 bg-white opacity-75 animate-pulse"></div>
+                </div>
+                {/* Animated sparks when timer is low */}
+                {timer <= 20 && (
+                  <div className="absolute right-0 top-1/2 transform -translate-y-1/2">
+                    <span className="text-yellow-300 animate-ping text-xl">✨</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main Content: Two Column Layout */}
         <div className="grid grid-cols-3 gap-4">
           {/* Left Column - Transmission (2/3 width) */}
@@ -1110,6 +1278,38 @@ const CyberInspector = () => {
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+        )}
+
+        {/* Developer Console */}
+        {showDevConsole && (
+          <div className="fixed bottom-0 left-0 right-0 bg-black bg-opacity-95 border-t-2 border-green-500 p-4 z-50" style={{ height: '300px' }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-green-400 font-bold">🔧 DEVELOPER CONSOLE</span>
+                <span className="text-gray-500 text-xs">(Press F12 to toggle)</span>
+              </div>
+              <button
+                onClick={() => {
+                  setDevLogs([]);
+                  devLog('Console cleared');
+                }}
+                className="bg-red-900 hover:bg-red-800 text-white px-3 py-1 rounded text-xs"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="bg-gray-900 rounded p-2 overflow-y-auto font-mono text-xs" style={{ height: '250px' }}>
+              {devLogs.length === 0 ? (
+                <div className="text-gray-500 italic">No logs yet. Press F12 to hide console.</div>
+              ) : (
+                devLogs.map((log, idx) => (
+                  <div key={idx} className="text-green-400 hover:bg-gray-800 py-1">
+                    {log}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
