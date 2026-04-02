@@ -1,141 +1,101 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 
 interface AudioFiles {
-  bgMusic: string;
-  approve: string;
-  deny: string;
-  correct: string;
-  wrong: string;
+  bgMusic:   string;
+  approve:   string;
+  deny:      string;
+  correct:   string;
+  wrong:     string;
   dayChange: string;
-  gameOver: string;
+  gameOver:  string;
   menuMusic: string;
 }
 
-export const useGameAudio = () => {
-  const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
-  const musicVolume = useRef(0.3);
-  const sfxVolume = useRef(0.5);
-  const isMuted = useRef(false);
+const AUDIO_FILES: AudioFiles = {
+  bgMusic:   '/sounds/background-music.mp3',
+  approve:   '/sounds/approve.mp3',
+  deny:      '/sounds/deny.mp3',
+  correct:   '/sounds/correct.mp3',
+  wrong:     '/sounds/wrong.mp3',
+  dayChange: '/sounds/day-change.mp3',
+  gameOver:  '/sounds/game-over.mp3',
+  menuMusic: '/sounds/menu-music.mp3',
+};
 
+export function useGameAudio() {
+  const refs      = useRef<Record<string, HTMLAudioElement>>({});
+  const musicVol  = useRef(0.3);
+  const sfxVol    = useRef(0.5);
+  const mutedRef  = useRef(false);
+
+  // Initialise once — stable across all renders
   useEffect(() => {
-    // Initialize audio elements
-    const audioFiles: AudioFiles = {
-      bgMusic: '/sounds/background-music.mp3',
-      approve: '/sounds/approve.mp3',
-      deny: '/sounds/deny.mp3',
-      correct: '/sounds/correct.mp3',
-      wrong: '/sounds/wrong.mp3',
-      dayChange: '/sounds/day-change.mp3',
-      gameOver: '/sounds/game-over.mp3',
-      menuMusic: '/sounds/menu-music.mp3',
-    };
-
-    Object.entries(audioFiles).forEach(([key, src]) => {
+    Object.entries(AUDIO_FILES).forEach(([key, src]) => {
       try {
-        const audio = new Audio(src);
-        audio.preload = 'auto';
-        
-        // Set volume based on type
-        if (key.includes('Music')) {
-          audio.volume = musicVolume.current;
-          audio.loop = true;
-        } else {
-          audio.volume = sfxVolume.current;
-        }
-        
-        // Handle errors silently
-        audio.addEventListener('error', () => {
-          console.warn(`Audio file not found: ${src}`);
-        });
-        
-        audioRefs.current[key] = audio;
-      } catch (err) {
-        console.warn(`Failed to load audio: ${src}`, err);
+        const audio     = new Audio(src);
+        audio.preload   = 'auto';
+        const isMusic   = key.includes('Music');
+        audio.volume    = isMusic ? musicVol.current : sfxVol.current;
+        if (isMusic) audio.loop = true;
+        audio.addEventListener('error', () =>
+          console.warn(`Audio not found: ${src}`)
+        );
+        refs.current[key] = audio;
+      } catch {
+        /* silent fail */
       }
     });
-
     return () => {
-      // Cleanup: stop and remove all audio
-      Object.values(audioRefs.current).forEach(audio => {
-        audio.pause();
-        audio.src = '';
-      });
+      Object.values(refs.current).forEach(a => { a.pause(); a.src = ''; });
     };
   }, []);
 
-  const playSound = (soundName: keyof AudioFiles) => {
-    if (isMuted.current) return;
-    
-    const audio = audioRefs.current[soundName];
-    if (audio) {
-      audio.currentTime = 0;
-      audio.play().catch(err => {
-        console.warn(`Failed to play sound: ${soundName}`, err);
-      });
-    }
-  };
+  // ── Stable callbacks — never recreated ──────────────────────────────────
 
-  const playMusic = (musicName: 'bgMusic' | 'menuMusic') => {
-    if (isMuted.current) return;
-    
-    // Stop all other music first
-    Object.entries(audioRefs.current).forEach(([key, audio]) => {
-      if (key.includes('Music') && key !== musicName) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
+  const playSound = useCallback((name: keyof AudioFiles) => {
+    if (mutedRef.current) return;
+    const a = refs.current[name];
+    if (!a) return;
+    a.currentTime = 0;
+    a.play().catch(() => { /* browser blocked */ });
+  }, []);
+
+  const playMusic = useCallback((name: 'bgMusic' | 'menuMusic') => {
+    if (mutedRef.current) return;
+    // Stop all music tracks first
+    Object.entries(refs.current).forEach(([k, a]) => {
+      if (k.includes('Music') && k !== name) { a.pause(); a.currentTime = 0; }
     });
+    refs.current[name]?.play().catch(() => { /* browser blocked */ });
+  }, []);
 
-    const music = audioRefs.current[musicName];
-    if (music) {
-      music.play().catch(err => {
-        console.warn(`Failed to play music: ${musicName}`, err);
-      });
-    }
-  };
-
-  const stopMusic = () => {
-    Object.entries(audioRefs.current).forEach(([key, audio]) => {
-      if (key.includes('Music')) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
+  const stopMusic = useCallback(() => {
+    Object.entries(refs.current).forEach(([k, a]) => {
+      if (k.includes('Music')) { a.pause(); a.currentTime = 0; }
     });
-  };
+  }, []);
 
-  const toggleMute = () => {
-    isMuted.current = !isMuted.current;
-    Object.values(audioRefs.current).forEach(audio => {
-      audio.muted = isMuted.current;
+  const toggleMute = useCallback((): boolean => {
+    mutedRef.current = !mutedRef.current;
+    Object.values(refs.current).forEach(a => { a.muted = mutedRef.current; });
+    return mutedRef.current;
+  }, []);
+
+  const setMusicVolume = useCallback((v: number) => {
+    musicVol.current = Math.max(0, Math.min(1, v));
+    Object.entries(refs.current).forEach(([k, a]) => {
+      if (k.includes('Music')) a.volume = musicVol.current;
     });
-    return isMuted.current;
-  };
+  }, []);
 
-  const setMusicVolume = (volume: number) => {
-    musicVolume.current = Math.max(0, Math.min(1, volume));
-    Object.entries(audioRefs.current).forEach(([key, audio]) => {
-      if (key.includes('Music')) {
-        audio.volume = musicVolume.current;
-      }
+  const setSfxVolume = useCallback((v: number) => {
+    sfxVol.current = Math.max(0, Math.min(1, v));
+    Object.entries(refs.current).forEach(([k, a]) => {
+      if (!k.includes('Music')) a.volume = sfxVol.current;
     });
-  };
+  }, []);
 
-  const setSfxVolume = (volume: number) => {
-    sfxVolume.current = Math.max(0, Math.min(1, volume));
-    Object.entries(audioRefs.current).forEach(([key, audio]) => {
-      if (!key.includes('Music')) {
-        audio.volume = sfxVolume.current;
-      }
-    });
-  };
+  const isMuted = useCallback(() => mutedRef.current, []);
 
-  return {
-    playSound,
-    playMusic,
-    stopMusic,
-    toggleMute,
-    setMusicVolume,
-    setSfxVolume,
-    isMuted: () => isMuted.current,
-  };
-};
+  return { playSound, playMusic, stopMusic, toggleMute, setMusicVolume, setSfxVolume, isMuted };
+}
