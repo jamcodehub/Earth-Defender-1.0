@@ -2,10 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle, XCircle, Clock, BookOpen, Radio, Volume2, VolumeX } from 'lucide-react';
 import { useGameAudio } from './useGameAudio';
 import { useVoice }     from './useVoice';
-import CharacterPortrait from './CharacterPortrait';
 import {
-  CHARACTERS, ZORGON_IMPOSTER_NAMES,
-  getCharacter, pickDialogueLine,
+  ZORGON_IMPOSTER_NAMES,
+  pickDialogueLine,
   type VoiceType,
 } from './characters';
 
@@ -16,11 +15,10 @@ interface TransmissionCase {
   type:          string;
   from:          string;
   to:            string;
-  species:       string;  // claimed species (may be faked)
-  actualSpecies: string;  // real species
+  species:       string;
+  actualSpecies: string;
   voiceType:     VoiceType;
   dialogueLine:  string;
-  characterId:   string;
   content:       string;
   dnaSig:        string;
   authCode:      string;
@@ -36,17 +34,11 @@ interface TransmissionCase {
   reason:        string;
 }
 
-interface Feedback {
-  correct: boolean;
-  message: string;
-  reason:  string;
-  action:  string;
-}
-
-interface Rule { id: string; text: string; }
+interface Feedback { correct: boolean; message: string; reason: string; action: string; }
+interface Rule     { id: string; text: string; }
 interface DayRules { title: string; activeChecks: string[]; rules: Rule[]; }
 
-// ── Day rule definitions ──────────────────────────────────────────────────────
+// ── Day rules ─────────────────────────────────────────────────────────────────
 
 const DAY_RULES: Record<number, DayRules> = {
   1: {
@@ -130,15 +122,13 @@ const DAY_RULES: Record<number, DayRules> = {
       { id: 'species',  text: 'Block all transmissions from the Zorgon Empire (hostile species)' },
       { id: 'dna',      text: 'Block any data packets containing shapeshifter DNA signatures' },
       { id: 'authCode', text: 'All transmissions must have valid authorization codes (format: EDF-XXXX)' },
-      { id: 'voiceID',  text: 'NEW: Voice ID system active — each species has a unique voice pattern. Zorgons speak differently even when disguised. Listen carefully!' },
-      { id: 'voiceID',  text: 'Human voice: warm, mid-range. Allied Alien: high-pitched, ethereal. Zorgon: deep, slow, distorted. A mismatch = BLOCK!' },
+      { id: 'voiceID',  text: 'NEW: Voice ID system active — each species has a unique vocal pattern. Listen carefully!' },
+      { id: 'voiceID',  text: 'Human: warm mid-range. Alien: high ethereal. Zorgon: deep slow distorted. Mismatch = BLOCK!' },
     ],
   },
 };
 
-// ── Endless-mode rules generator (Day 9+) ────────────────────────────────────
 const ALL_EXTRA_CHECKS = ['authCode', 'encryption', 'ip', 'port', 'hash', 'employeeID', 'ssl', 'voiceID'];
-
 const RULES_TEXT: Record<string, string> = {
   authCode:   'All transmissions must have valid authorization codes (format: EDF-XXXX)',
   encryption: 'Military/Research: Level 5 encryption. Civilian: Level 3+',
@@ -154,9 +144,8 @@ const RULES_TEXT: Record<string, string> = {
 
 function buildEndlessRules(day: number): DayRules {
   const shuffled = [...ALL_EXTRA_CHECKS].sort(() => Math.random() - 0.5);
-  const extraCount = 2 + (day % 3); // 2‑4 extra checks
-  const extras = shuffled.slice(0, extraCount);
-  const checks = ['species', 'dna', ...extras];
+  const extras   = shuffled.slice(0, 2 + (day % 3));
+  const checks   = ['species', 'dna', ...extras];
   return {
     title: `Endless Protocol — Day ${day}`,
     activeChecks: checks,
@@ -169,7 +158,7 @@ function getDayRules(day: number): DayRules {
   return buildEndlessRules(day);
 }
 
-// ── Static data pools ────────────────────────────────────────────────────────
+// ── Data pools ────────────────────────────────────────────────────────────────
 
 const SENDER_NAMES: Record<string, string[]> = {
   Human:      ['Commander Harris', 'Dr. Chen', 'Captain Rodriguez', 'Officer Kim', 'General Morrison', 'Lieutenant Torres', 'Pilot Jackson'],
@@ -178,11 +167,11 @@ const SENDER_NAMES: Record<string, string[]> = {
   Zorgon:     ["Warlord Xar'goth", "Commander Grath'nak", "Admiral Vor'ath", "General Kra'zor"],
 };
 
-const DESTINATIONS = ['Lunar Base Alpha', 'Mars Colony', 'Saturn Outpost', 'Earth Defense HQ', 'Research Station',
-  'UN Headquarters', 'Fleet Command', 'Hospital Ship', 'Command Center', 'Flight Control'];
+const DESTINATIONS = ['Lunar Base Alpha', 'Mars Colony', 'Saturn Outpost', 'Earth Defense HQ',
+  'Research Station', 'UN Headquarters', 'Fleet Command', 'Hospital Ship', 'Command Center', 'Flight Control'];
 
 const MESSAGE_CONTENT = [
-  'Sending supply manifest for next week's shipment.',
+  "Sending supply manifest for next week's shipment.",
   'Lab results attached for review.',
   'Status update on current operations.',
   'Tactical deployment orders included.',
@@ -200,7 +189,18 @@ const VALID_EMPLOYEE_IDS: Record<string, string[]> = {
   Pleiadian:  ['P-11203', 'P-93847', 'P-20194'],
 };
 
-// ── Protocol info panel ──────────────────────────────────────────────────────
+const VOICE_LABEL: Record<VoiceType, string> = {
+  human:  'HUMAN SPEECH PATTERN',
+  alien:  'ALLIED ALIEN PATTERN',
+  zorgon: 'ZORGON PATTERN DETECTED',
+};
+const VOICE_COLOUR: Record<VoiceType, string> = {
+  human:  '#4ade80',
+  alien:  '#22d3ee',
+  zorgon: '#ef4444',
+};
+
+// ── Protocol info ─────────────────────────────────────────────────────────────
 
 const PROTOCOL_INFO: Record<string, { title: string; description: string; whatToLookFor: string[] }> = {
   authCode: {
@@ -250,7 +250,6 @@ const PROTOCOL_INFO: Record<string, { title: string; description: string; whatTo
     description: 'A cryptographic hash is a unique fingerprint of data. Changed data = changed hash.',
     whatToLookFor: [
       'Valid hash: exactly 64 hexadecimal characters (0–9, a–f)',
-      "Example: a3f2b9c4d5e6f7a8…",
       "'HASH_MISMATCH' = data was altered/corrupted → BLOCK",
       'Too short or invalid chars = compromised integrity → BLOCK',
       'Real-world equivalent: SHA-256 checksums',
@@ -264,7 +263,6 @@ const PROTOCOL_INFO: Record<string, { title: string; description: string; whatTo
       'Valid Andromedan IDs: A-73829, A-29481, A-10293',
       'Valid Pleiadian IDs: P-11203, P-93847, P-20194',
       'Any ID not in the database = unauthorized access attempt',
-      'Real-world equivalent: Employee badges, access control lists',
     ],
   },
   ssl: {
@@ -275,17 +273,15 @@ const PROTOCOL_INFO: Record<string, { title: string; description: string; whatTo
       'Block certificates expired before today',
       'Block certificates expiring within 7 days',
       'Example expired: 2087-06-08  /  Expiring soon: 2087-06-20',
-      'Real-world equivalent: HTTPS certificate monitoring',
     ],
   },
   species: {
     title: 'Species Verification',
-    description: 'Identifying the sender\'s species is the first line of defence. Hostile species must be blocked.',
+    description: "Identifying the sender's species is the first line of defence. Hostile species must be blocked.",
     whatToLookFor: [
       'Allied species: Humans, Andromedans, Pleiadians (generally ALLOW)',
       'Hostile species: Zorgons (always BLOCK)',
       'Cross-reference with other security checks for final decision',
-      'Real-world equivalent: User authentication, identity verification',
     ],
   },
   dna: {
@@ -295,54 +291,49 @@ const PROTOCOL_INFO: Record<string, { title: string; description: string; whatTo
       'Normal: Human-Standard, Andromedan-Standard, Pleiadian-Standard',
       "'Shapeshifter-Detected' = impostor attempting infiltration → BLOCK",
       'Always cross-check DNA with claimed species',
-      'Real-world equivalent: Biometric authentication, fingerprint scanning',
     ],
   },
   voiceID: {
-    title: 'Voice ID Verification (NEW)',
+    title: 'Voice ID Verification (NEW — Day 8+)',
     description: 'Each species has a distinct vocal pattern. The Voice ID system detects Zorgon imposters even when they carry forged documents.',
     whatToLookFor: [
-      'Human voice: warm, mid-range triangle wave, natural cadence',
-      'Allied Alien voice: higher-pitched, ethereal, faster',
+      'Human voice: warm, mid-range — comfortable natural cadence',
+      'Allied Alien voice: higher-pitched, ethereal, faster rhythm',
       'Zorgon voice: deep, slow, distorted, menacing — unmistakable',
-      'A Zorgon cannot hide its voice pattern even with a forged ID',
-      'Listen for the deep rumble — any mismatch between claimed species and voice → BLOCK',
+      'A Zorgon cannot hide its voice even with a forged ID',
+      'Any mismatch between claimed species and voice pattern → BLOCK',
     ],
   },
 };
 
-// ── Transmission generator ───────────────────────────────────────────────────
+// ── Transmission generator ────────────────────────────────────────────────────
 
 function generateTransmission(currentDay: number): TransmissionCase {
   const dayRules     = getDayRules(currentDay);
   const activeChecks = dayRules.activeChecks;
 
-  // Pick a random check to potentially violate (or none)
   const violatableChecks = activeChecks.filter(c => c !== 'species' && c !== 'dna');
   const errorCheck: string | null =
     Math.random() < 0.48 ? null
     : violatableChecks[Math.floor(Math.random() * violatableChecks.length)] ?? null;
 
-  // ── voiceID imposter path ────────────────────────────────────────────────
-  let isImposter        = false;
-  let actualSpecies     = '';
+  let isImposter    = false;
+  let actualSpecies = '';
   let speciesPool: string[];
 
   if (errorCheck === 'voiceID') {
-    // Zorgon disguised as Pleiadian or Andromedan
     isImposter    = true;
     actualSpecies = 'Zorgon';
     speciesPool   = ['Pleiadian', 'Andromedan'];
   } else if (errorCheck === 'species') {
-    speciesPool   = ['Zorgon'];
+    speciesPool = ['Zorgon'];
   } else {
-    speciesPool   = ['Human', 'Andromedan', 'Pleiadian'];
+    speciesPool = ['Human', 'Andromedan', 'Pleiadian'];
   }
 
   const claimedSpecies = speciesPool[Math.floor(Math.random() * speciesPool.length)];
   if (!actualSpecies) actualSpecies = claimedSpecies;
 
-  // ── Sender name ──────────────────────────────────────────────────────────
   let from: string;
   if (isImposter) {
     from = ZORGON_IMPOSTER_NAMES[Math.floor(Math.random() * ZORGON_IMPOSTER_NAMES.length)];
@@ -351,36 +342,28 @@ function generateTransmission(currentDay: number): TransmissionCase {
     from = pool[Math.floor(Math.random() * pool.length)];
   }
 
-  const charData    = getCharacter(from);
-  const dialogueLine = pickDialogueLine(from);
-  const characterId  = charData.id;
-
-  // Voice type follows ACTUAL species, not claimed
   let voiceType: VoiceType;
   if (actualSpecies === 'Zorgon') voiceType = 'zorgon';
   else if (actualSpecies === 'Human') voiceType = 'human';
   else voiceType = 'alien';
 
-  const to      = DESTINATIONS[Math.floor(Math.random() * DESTINATIONS.length)];
-  const content = MESSAGE_CONTENT[Math.floor(Math.random() * MESSAGE_CONTENT.length)];
+  const dialogueLine = pickDialogueLine(from);
+  const to           = DESTINATIONS[Math.floor(Math.random() * DESTINATIONS.length)];
+  const content      = MESSAGE_CONTENT[Math.floor(Math.random() * MESSAGE_CONTENT.length)];
 
-  // ── DNA ──────────────────────────────────────────────────────────────────
   const dnaSig = (errorCheck === 'dna' && claimedSpecies !== 'Zorgon')
     ? 'Shapeshifter-Detected'
     : `${claimedSpecies}-Standard`;
 
-  // ── Auth code ────────────────────────────────────────────────────────────
   let authCode = '';
   if (activeChecks.includes('authCode')) {
     if (errorCheck === 'authCode') {
-      const bad = [`PDF-${Math.floor(Math.random() * 10000)}`, 'EDF-ABCD', ''];
-      authCode = bad[Math.floor(Math.random() * bad.length)];
+      authCode = [`PDF-${Math.floor(Math.random() * 10000)}`, 'EDF-ABCD', ''][Math.floor(Math.random() * 3)];
     } else {
       authCode = `EDF-${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
     }
   }
 
-  // ── Encryption ───────────────────────────────────────────────────────────
   let category = '';
   let encryption = '';
   if (activeChecks.includes('encryption')) {
@@ -395,16 +378,15 @@ function generateTransmission(currentDay: number): TransmissionCase {
     }
   }
 
-  // ── IP ───────────────────────────────────────────────────────────────────
   const rnd256 = () => Math.floor(Math.random() * 256);
   let sourceIP = '';
   if (activeChecks.includes('ip')) {
     if (errorCheck === 'ip') {
       sourceIP = `66.6.${rnd256()}.${rnd256()}`;
     } else if (actualSpecies === 'Human') {
-      const pfx = ['10.', '172.', '192.168.'][Math.floor(Math.random() * 3)];
-      if (pfx === '10.') sourceIP = `10.${rnd256()}.${rnd256()}.${rnd256()}`;
-      else if (pfx === '172.') sourceIP = `172.${16 + Math.floor(Math.random() * 16)}.${rnd256()}.${rnd256()}`;
+      const i = Math.floor(Math.random() * 3);
+      if (i === 0) sourceIP = `10.${rnd256()}.${rnd256()}.${rnd256()}`;
+      else if (i === 1) sourceIP = `172.${16 + Math.floor(Math.random() * 16)}.${rnd256()}.${rnd256()}`;
       else sourceIP = `192.168.${rnd256()}.${rnd256()}`;
     } else if (actualSpecies === 'Andromedan') {
       sourceIP = `203.${rnd256()}.${rnd256()}.${rnd256()}`;
@@ -415,16 +397,13 @@ function generateTransmission(currentDay: number): TransmissionCase {
     }
   }
 
-  // ── Port ─────────────────────────────────────────────────────────────────
+  const SUSPICIOUS_PORTS = ['1337', '31337', '4444', '5555', '23'];
   let port = '';
   if (activeChecks.includes('port')) {
-    const suspicious = ['1337', '31337', '4444', '5555', '23'];
     if (errorCheck === 'port') {
-      if (category === 'Military' || category === 'Research') {
-        port = ['80', '8080', '23', '1337'][Math.floor(Math.random() * 4)];
-      } else {
-        port = suspicious[Math.floor(Math.random() * suspicious.length)];
-      }
+      port = (category === 'Military' || category === 'Research')
+        ? ['80', '8080', '23', '1337'][Math.floor(Math.random() * 4)]
+        : SUSPICIOUS_PORTS[Math.floor(Math.random() * SUSPICIOUS_PORTS.length)];
     } else if (category === 'Military') {
       port = ['443', '22'][Math.floor(Math.random() * 2)];
     } else if (category === 'Research') {
@@ -434,7 +413,6 @@ function generateTransmission(currentDay: number): TransmissionCase {
     }
   }
 
-  // ── Packet hash ──────────────────────────────────────────────────────────
   let packetHash = '';
   if (activeChecks.includes('hash')) {
     if (errorCheck === 'hash') {
@@ -445,7 +423,6 @@ function generateTransmission(currentDay: number): TransmissionCase {
     }
   }
 
-  // ── Employee ID ───────────────────────────────────────────────────────────
   let employeeID = '';
   if (activeChecks.includes('employeeID') && actualSpecies !== 'Zorgon') {
     const validIDs = VALID_EMPLOYEE_IDS[actualSpecies] ?? [];
@@ -457,140 +434,95 @@ function generateTransmission(currentDay: number): TransmissionCase {
     }
   }
 
-  // ── SSL ───────────────────────────────────────────────────────────────────
   let sslExpiry = '';
   if (activeChecks.includes('ssl')) {
-    if (errorCheck === 'ssl') {
-      sslExpiry = ['2087-06-10', '2087-06-08', '2087-05-20'][Math.floor(Math.random() * 3)];
-    } else {
-      sslExpiry = ['2088-01-15', '2087-12-20', '2087-09-30', '2087-08-10'][Math.floor(Math.random() * 4)];
-    }
+    sslExpiry = errorCheck === 'ssl'
+      ? ['2087-06-10', '2087-06-08', '2087-05-20'][Math.floor(Math.random() * 3)]
+      : ['2088-01-15', '2087-12-20', '2087-09-30', '2087-08-10'][Math.floor(Math.random() * 4)];
   }
 
-  // ── Voice ID status ───────────────────────────────────────────────────────
-  let voiceIDStatus: TransmissionCase['voiceIDStatus'] = 'na';
-  if (activeChecks.includes('voiceID')) {
-    voiceIDStatus = isImposter ? 'mismatch' : 'match';
-  }
+  const voiceIDStatus: TransmissionCase['voiceIDStatus'] = activeChecks.includes('voiceID')
+    ? (isImposter ? 'mismatch' : 'match')
+    : 'na';
 
-  // ── Determine correct action ──────────────────────────────────────────────
+  // Correct action
   let correctAction = 'allow';
   let reason        = 'All protocols check out — legitimate transmission';
 
-  const sus = ['1337', '31337', '4444', '5555', '23'];
-
   if (actualSpecies === 'Zorgon' && !isImposter) {
-    correctAction = 'block';
-    reason        = 'Hostile Zorgon species detected';
+    correctAction = 'block'; reason = 'Hostile Zorgon species detected';
   } else if (dnaSig === 'Shapeshifter-Detected') {
-    correctAction = 'block';
-    reason        = 'Shapeshifter DNA signature detected';
+    correctAction = 'block'; reason = 'Shapeshifter DNA signature detected';
   } else if (isImposter && activeChecks.includes('voiceID')) {
-    correctAction = 'block';
-    reason        = 'Voice ID mismatch — Zorgon vocal pattern detected despite forged species claim';
+    correctAction = 'block'; reason = 'Voice ID mismatch — Zorgon vocal pattern detected despite forged species claim';
   } else if (activeChecks.includes('authCode') && (!authCode || !authCode.match(/^EDF-\d{4}$/))) {
-    correctAction = 'block';
-    reason        = authCode ? 'Invalid authorization code format' : 'Missing authorization code';
+    correctAction = 'block'; reason = authCode ? 'Invalid authorization code format' : 'Missing authorization code';
   } else if (activeChecks.includes('encryption') && (category === 'Military' || category === 'Research') && encryption !== 'Level 5') {
-    correctAction = 'block';
-    reason        = `${category} transmission requires Level 5 encryption`;
+    correctAction = 'block'; reason = `${category} transmission requires Level 5 encryption`;
   } else if (activeChecks.includes('ip') && sourceIP.startsWith('66.6.')) {
-    correctAction = 'block';
-    reason        = 'Source IP from known hostile subnet (66.6.x.x)';
+    correctAction = 'block'; reason = 'Source IP from known hostile subnet (66.6.x.x)';
   } else if (activeChecks.includes('port')) {
-    if (sus.includes(port)) {
-      correctAction = 'block';
-      reason        = `Suspicious port detected: ${port}`;
+    if (SUSPICIOUS_PORTS.includes(port)) {
+      correctAction = 'block'; reason = `Suspicious port detected: ${port}`;
     } else if (category === 'Military' && !['443', '22'].includes(port)) {
-      correctAction = 'block';
-      reason        = 'Military transmission must use secure ports (443, 22)';
+      correctAction = 'block'; reason = 'Military transmission must use secure ports (443, 22)';
     } else if (category === 'Research' && !['443', '22', '8443'].includes(port)) {
-      correctAction = 'block';
-      reason        = 'Research transmission must use secure ports (443, 22, 8443)';
+      correctAction = 'block'; reason = 'Research transmission must use secure ports (443, 22, 8443)';
     }
   } else if (activeChecks.includes('hash')) {
     if (packetHash === 'HASH_MISMATCH') {
-      correctAction = 'block';
-      reason        = 'Packet hash mismatch — transmission may be tampered';
+      correctAction = 'block'; reason = 'Packet hash mismatch — transmission may be tampered';
     } else if (packetHash.length !== 64 || !/^[0-9a-f]+$/.test(packetHash)) {
-      correctAction = 'block';
-      reason        = 'Invalid packet hash format';
+      correctAction = 'block'; reason = 'Invalid packet hash format';
     }
   } else if (activeChecks.includes('employeeID') && employeeID && !(VALID_EMPLOYEE_IDS[actualSpecies] ?? []).includes(employeeID)) {
-    correctAction = 'block';
-    reason        = 'Employee ID not found in registered database';
+    correctAction = 'block'; reason = 'Employee ID not found in registered database';
   } else if (activeChecks.includes('ssl') && sslExpiry) {
-    const expiry  = new Date(sslExpiry);
-    const today   = new Date('2087-06-15');
-    const daysDiff = Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysDiff < 0) {
-      correctAction = 'block';
-      reason        = `SSL certificate expired on ${sslExpiry}`;
-    } else if (daysDiff < 7) {
-      correctAction = 'block';
-      reason        = 'SSL certificate expires within 7 days';
-    }
+    const diff = Math.floor((new Date(sslExpiry).getTime() - new Date('2087-06-15').getTime()) / 86400000);
+    if (diff < 0)  { correctAction = 'block'; reason = `SSL certificate expired on ${sslExpiry}`; }
+    else if (diff < 7) { correctAction = 'block'; reason = 'SSL certificate expires within 7 days'; }
   }
 
   return {
-    day: currentDay,
-    type: 'Transmission',
-    from,
-    to,
-    species: claimedSpecies,
-    actualSpecies,
-    voiceType,
-    dialogueLine,
-    characterId,
-    content,
-    dnaSig,
-    authCode,
-    category,
-    encryption,
-    sourceIP,
-    port,
-    packetHash,
-    employeeID,
-    sslExpiry,
-    voiceIDStatus,
-    correctAction,
-    reason,
+    day: currentDay, type: 'Transmission', from, to,
+    species: claimedSpecies, actualSpecies, voiceType, dialogueLine,
+    content, dnaSig, authCode, category, encryption, sourceIP, port,
+    packetHash, employeeID, sslExpiry, voiceIDStatus, correctAction, reason,
   };
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function App() {
   const audio = useGameAudio();
-  const voice = useVoice(false); // passes mute state below
+  const voice = useVoice(false);
 
-  // ── Stable refs (prevent stale closures in callbacks) ────────────────────
-  const dayRef           = useRef(1);
-  const safetyRef        = useRef(100);
-  const scoreRef         = useRef(0);
-  const processedRef     = useRef(0);
-  const mutedRef         = useRef(false);
-  const isSpeakingRef    = useRef(false);
+  const dayRef        = useRef(1);
+  const safetyRef     = useRef(100);
+  const scoreRef      = useRef(0);
+  const processedRef  = useRef(0);
+  const mutedRef      = useRef(false);
+  const isSpeakingRef = useRef(false);
 
-  // ── React state ──────────────────────────────────────────────────────────
-  const [gameState,       setGameState]       = useState<'menu' | 'playing' | 'ended'>('menu');
-  const [day,             setDay]             = useState(1);
-  const [score,           setScore]           = useState(0);
-  const [humanitySafety,  setHumanitySafety]  = useState(100);
-  const [timer,           setTimer]           = useState(90);
-  const [processedToday,  setProcessedToday]  = useState(0);
-  const [currentCase,     setCurrentCase]     = useState<TransmissionCase | null>(null);
-  const [feedback,        setFeedback]        = useState<Feedback | null>(null);
-  const [selectedInfo,    setSelectedInfo]    = useState<string | null>(null);
-  const [isPaused,        setIsPaused]        = useState(false);
-  const [isMuted,         setIsMuted]         = useState(false);
-  const [safetyGlow,      setSafetyGlow]      = useState<'green' | 'red' | null>(null);
-  const [safetyShake,     setSafetyShake]     = useState(false);
-  const [highestDay,      setHighestDay]      = useState(1);
-  const [highestScore,    setHighestScore]    = useState(0);
-  const [isSpeaking,      setIsSpeaking]      = useState(false);
+  const [gameState,         setGameState]         = useState<'menu' | 'playing' | 'ended'>('menu');
+  const [day,               setDay]               = useState(1);
+  const [score,             setScore]             = useState(0);
+  const [humanitySafety,    setHumanitySafety]    = useState(100);
+  const [timer,             setTimer]             = useState(90);
+  const [processedToday,    setProcessedToday]    = useState(0);
+  const [currentCase,       setCurrentCase]       = useState<TransmissionCase | null>(null);
+  const [feedback,          setFeedback]          = useState<Feedback | null>(null);
+  const [selectedInfo,      setSelectedInfo]      = useState<string | null>(null);
+  const [isPaused,          setIsPaused]          = useState(false);
+  const [isMuted,           setIsMuted]           = useState(false);
+  const [safetyGlow,        setSafetyGlow]        = useState<'green' | 'red' | null>(null);
+  const [safetyShake,       setSafetyShake]       = useState(false);
+  const [highestDay,        setHighestDay]        = useState(1);
+  const [highestScore,      setHighestScore]      = useState(0);
+  const [isSpeaking,        setIsSpeaking]        = useState(false);
+  const [displayedDialogue, setDisplayedDialogue] = useState('');
+  const [dialogueCharIdx,   setDialogueCharIdx]   = useState(0);
 
-  // ── Load high scores once ────────────────────────────────────────────────
   useEffect(() => {
     try {
       const d = localStorage.getItem('highestDay');
@@ -600,190 +532,200 @@ export default function App() {
     } catch { /* no storage */ }
   }, []);
 
-  // ── Mute sync ─────────────────────────────────────────────────────────────
   useEffect(() => { mutedRef.current = isMuted; }, [isMuted]);
 
-  // ── Music on game-state change ────────────────────────────────────────────
   useEffect(() => {
     if (gameState === 'menu')  audio.playMusic('menuMusic');
     if (gameState === 'ended') audio.stopMusic();
   }, [gameState, audio.playMusic, audio.stopMusic]);
 
-  // ── Timer ─────────────────────────────────────────────────────────────────
+  // Timer
   useEffect(() => {
     if (gameState !== 'playing' || isPaused) return;
     if (timer <= 0) { endDay(); return; }
     const id = setInterval(() => setTimer(t => t - 1), 1000);
     return () => clearInterval(id);
-  // endDay is stable (useCallback), safe to include
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer, gameState, isPaused]);
 
-  // ── ESC key to pause ──────────────────────────────────────────────────────
+  // ESC key
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && gameState === 'playing') setIsPaused(p => !p);
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && gameState === 'playing') setIsPaused(p => !p); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
   }, [gameState]);
 
-  // ── Voice start/stop when case changes ───────────────────────────────────
+  // Reset typewriter when case changes
   useEffect(() => {
     if (!currentCase) return;
-    if (feedback) { voice.stopSpeaking(); setIsSpeaking(false); isSpeakingRef.current = false; return; }
+    setDisplayedDialogue('');
+    setDialogueCharIdx(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCase?.from]);
 
+  // Typewriter tick
+  useEffect(() => {
+    if (!currentCase || feedback) return;
+    const line = currentCase.dialogueLine;
+    if (dialogueCharIdx >= line.length) return;
+    const t = setTimeout(() => {
+      setDisplayedDialogue(p => p + line[dialogueCharIdx]);
+      setDialogueCharIdx(p => p + 1);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [dialogueCharIdx, currentCase, feedback]);
+
+  // Voice start/stop
+  useEffect(() => {
+    if (!currentCase) return;
+    if (feedback) {
+      voice.stopSpeaking(); setIsSpeaking(false); isSpeakingRef.current = false;
+      return;
+    }
     isSpeakingRef.current = true;
     setIsSpeaking(true);
     voice.startSpeaking(currentCase.voiceType);
-
-    // Auto-stop after ~3 s (approximate dialogue length)
     const id = setTimeout(() => {
-      voice.stopSpeaking();
-      setIsSpeaking(false);
-      isSpeakingRef.current = false;
+      voice.stopSpeaking(); setIsSpeaking(false); isSpeakingRef.current = false;
     }, 3000);
     return () => clearTimeout(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCase?.from, feedback]);
 
-  // ── Helpers to keep ref+state in sync ────────────────────────────────────
-  const updateDay      = useCallback((d: number)    => { dayRef.current       = d;  setDay(d);            }, []);
-  const updateSafety   = useCallback((s: number)    => { safetyRef.current    = s;  setHumanitySafety(s); }, []);
-  const updateScore    = useCallback((s: number)    => { scoreRef.current     = s;  setScore(s);          }, []);
-  const updateProcess  = useCallback((p: number)    => { processedRef.current = p;  setProcessedToday(p); }, []);
+  const updateDay     = useCallback((d: number) => { dayRef.current       = d; setDay(d);            }, []);
+  const updateSafety  = useCallback((s: number) => { safetyRef.current    = s; setHumanitySafety(s); }, []);
+  const updateScore   = useCallback((s: number) => { scoreRef.current     = s; setScore(s);          }, []);
+  const updateProcess = useCallback((p: number) => { processedRef.current = p; setProcessedToday(p); }, []);
 
-  // ── Load a new case for the given day ────────────────────────────────────
   const loadCase = useCallback((forDay: number) => {
-    voice.stopSpeaking();
-    setIsSpeaking(false);
-    isSpeakingRef.current = false;
+    voice.stopSpeaking(); setIsSpeaking(false); isSpeakingRef.current = false;
     setCurrentCase(generateTransmission(forDay));
   }, [voice]);
 
-  // ── Save high scores ──────────────────────────────────────────────────────
   const saveHighScores = useCallback(() => {
-    const currentDay   = dayRef.current;
-    const currentScore = scoreRef.current;
-    if (currentDay > highestDay) {
-      setHighestDay(currentDay);
-      try { localStorage.setItem('highestDay', String(currentDay)); } catch { /* no storage */ }
-    }
-    if (currentScore > highestScore) {
-      setHighestScore(currentScore);
-      try { localStorage.setItem('highestScore', String(currentScore)); } catch { /* no storage */ }
-    }
+    const cd = dayRef.current; const cs = scoreRef.current;
+    if (cd > highestDay)   { setHighestDay(cd);   try { localStorage.setItem('highestDay',   String(cd)); } catch { /**/ } }
+    if (cs > highestScore) { setHighestScore(cs); try { localStorage.setItem('highestScore', String(cs)); } catch { /**/ } }
   }, [highestDay, highestScore]);
 
-  // ── End the current day ───────────────────────────────────────────────────
   const endDay = useCallback(() => {
-    voice.stopSpeaking();
-    setIsSpeaking(false);
-
+    voice.stopSpeaking(); setIsSpeaking(false);
     if (safetyRef.current <= 0) {
-      saveHighScores();
-      audio.stopMusic();
-      audio.playSound('gameOver');
-      setGameState('ended');
-      return;
+      saveHighScores(); audio.stopMusic(); audio.playSound('gameOver'); setGameState('ended'); return;
     }
     audio.playSound('dayChange');
-    const nextDay = dayRef.current + 1;
-    updateDay(nextDay);
-    updateProcess(0);
-    setTimer(90);
-    setTimeout(() => loadCase(nextDay), 150);
+    const next = dayRef.current + 1;
+    updateDay(next); updateProcess(0); setTimer(90);
+    setTimeout(() => loadCase(next), 150);
   }, [voice, saveHighScores, audio, updateDay, updateProcess, loadCase]);
 
-  // ── Handle player decision ────────────────────────────────────────────────
   const handleDecision = useCallback((action: string) => {
     if (!currentCase) return;
-
-    voice.stopSpeaking();
-    setIsSpeaking(false);
-    isSpeakingRef.current = false;
-
+    voice.stopSpeaking(); setIsSpeaking(false); isSpeakingRef.current = false;
     audio.playSound(action === 'allow' ? 'approve' : 'deny');
 
-    const correct       = action === currentCase.correctAction;
-    const newScore      = scoreRef.current  + (correct ? 15 : -15);
-    const newSafety     = Math.max(0, Math.min(100, safetyRef.current + (correct ? 5 : -20)));
-    const newProcessed  = processedRef.current + 1;
+    const correct      = action === currentCase.correctAction;
+    const newScore     = scoreRef.current  + (correct ? 15 : -15);
+    const newSafety    = Math.max(0, Math.min(100, safetyRef.current + (correct ? 5 : -20)));
+    const newProcessed = processedRef.current + 1;
 
-    updateScore(newScore);
-    updateSafety(newSafety);
-    updateProcess(newProcessed);
+    updateScore(newScore); updateSafety(newSafety); updateProcess(newProcessed);
 
-    if (correct) {
-      audio.playSound('correct');
-      setSafetyGlow('green');
-    } else {
-      audio.playSound('wrong');
-      setSafetyGlow('red');
-      setSafetyShake(true);
-      setTimeout(() => setSafetyShake(false), 600);
-    }
+    if (correct) { audio.playSound('correct'); setSafetyGlow('green'); }
+    else { audio.playSound('wrong'); setSafetyGlow('red'); setSafetyShake(true); setTimeout(() => setSafetyShake(false), 600); }
     setTimeout(() => setSafetyGlow(null), 1000);
 
-    setFeedback({
-      correct,
-      message: correct ? '✓ Correct Assessment!' : '✗ Critical Error!',
-      reason:  currentCase.reason,
-      action,
-    });
+    setFeedback({ correct, message: correct ? '✓ Correct Assessment!' : '✗ Critical Error!', reason: currentCase.reason, action });
 
-    // After feedback, advance
     setTimeout(() => {
       setFeedback(null);
-      // Use the captured newProcessed (not stale state)
-      if (newProcessed >= 3 || newSafety <= 0) {
-        endDay();
-      } else {
-        loadCase(dayRef.current);
-      }
+      if (newProcessed >= 3 || newSafety <= 0) endDay();
+      else loadCase(dayRef.current);
     }, 3000);
   }, [currentCase, voice, audio, updateScore, updateSafety, updateProcess, endDay, loadCase]);
 
-  // ── Start / restart game ──────────────────────────────────────────────────
   const startGame = useCallback(() => {
     voice.stopSpeaking();
-    updateDay(1);
-    updateScore(0);
-    updateSafety(100);
-    updateProcess(0);
-    setFeedback(null);
-    setSelectedInfo(null);
-    setIsPaused(false);
-    setTimer(90);
-    setGameState('playing');
-    audio.playMusic('bgMusic');
-    // Load first case after state settles
+    updateDay(1); updateScore(0); updateSafety(100); updateProcess(0);
+    setFeedback(null); setSelectedInfo(null); setIsPaused(false); setTimer(90);
+    setGameState('playing'); audio.playMusic('bgMusic');
     setTimeout(() => loadCase(1), 50);
   }, [voice, audio, updateDay, updateScore, updateSafety, updateProcess, loadCase]);
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-  const currentDayRules  = getDayRules(Math.min(day, 8));
-  const voiceIDActive    = currentDayRules.activeChecks.includes('voiceID');
+  const currentDayRules = getDayRules(Math.min(day, 8));
+  const voiceIDActive   = currentDayRules.activeChecks.includes('voiceID');
 
-  // ── Render helpers ────────────────────────────────────────────────────────
-
+  // ── renderCase ────────────────────────────────────────────────────────────
   function renderCase() {
     if (!currentCase || feedback) return null;
-    const checks = getDayRules(Math.min(day, 8)).activeChecks;
+    const checks        = getDayRules(Math.min(day, 8)).activeChecks;
+    const voiceMismatch = voiceIDActive && currentCase.voiceIDStatus === 'mismatch';
 
     return (
       <div className="bg-gray-800 border-2 border-cyan-500 p-5 rounded-lg shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-cyan-400">{currentCase.type}</h3>
           {day === 1 && (
-            <span className="px-3 py-1 rounded font-bold bg-blue-900 text-blue-200 text-sm">
-              ℹ TRAINING MODE
-            </span>
+            <span className="px-3 py-1 rounded font-bold bg-blue-900 text-blue-200 text-sm">ℹ TRAINING MODE</span>
           )}
         </div>
 
+        {/* Voice-transmission box */}
+        <div
+          className="mb-4 rounded-lg p-3"
+          style={{
+            background: '#000000cc',
+            border: `1px solid ${isSpeaking ? VOICE_COLOUR[currentCase.voiceType] : '#334155'}`,
+            boxShadow: isSpeaking ? `0 0 12px ${VOICE_COLOUR[currentCase.voiceType]}44` : 'none',
+            transition: 'border-color 0.2s, box-shadow 0.2s',
+          }}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              {/* Waveform bars */}
+              <div className="flex items-end gap-0.5" style={{ height: 16 }}>
+                {[1, 2, 3, 4, 3, 2].map((h, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      width: 3, borderRadius: 2,
+                      background: VOICE_COLOUR[currentCase.voiceType],
+                      height: `${isSpeaking ? h * 20 : 20}%`,
+                      transition: `height ${0.1 + i * 0.03}s ease`,
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="font-mono text-xs font-bold" style={{ color: VOICE_COLOUR[currentCase.voiceType] }}>
+                INCOMING VOICE TRANSMISSION
+              </span>
+            </div>
+            {voiceIDActive && (
+              <span
+                className="font-mono text-xs font-bold px-2 py-0.5 rounded"
+                style={{
+                  background: voiceMismatch ? '#7f1d1d' : '#14532d',
+                  color:      voiceMismatch ? '#fca5a5' : '#4ade80',
+                  border:     `1px solid ${voiceMismatch ? '#ef4444' : '#22c55e'}`,
+                }}
+              >
+                {voiceMismatch ? '⚠ VOICE MISMATCH' : `✓ ${VOICE_LABEL[currentCase.voiceType]}`}
+              </span>
+            )}
+          </div>
+          <div className="font-mono text-xs mb-1" style={{ color: '#64748b' }}>
+            {currentCase.from} → {currentCase.to}
+          </div>
+          <p className="font-mono text-sm leading-relaxed" style={{ color: voiceMismatch ? '#fca5a5' : '#86efac', minHeight: 36 }}>
+            {displayedDialogue}
+            {dialogueCharIdx < currentCase.dialogueLine.length && (
+              <span className="animate-pulse">▌</span>
+            )}
+          </p>
+        </div>
+
+        {/* Security data grid */}
         <div className="grid grid-cols-2 gap-3 mb-3">
-          {/* Transmission data */}
           <div className="space-y-2 text-gray-300 font-mono text-sm bg-gray-900 p-3 rounded border border-cyan-700">
             <div className="text-cyan-300 font-bold mb-1">TRANSMISSION DATA</div>
             <div><span className="text-cyan-400">FROM:</span> {currentCase.from}</div>
@@ -792,7 +734,6 @@ export default function App() {
             <div><span className="text-cyan-400">DNA SIG:</span> {currentCase.dnaSig}</div>
           </div>
 
-          {/* Security checks */}
           <div className="space-y-2 text-gray-300 font-mono text-sm bg-gray-900 p-3 rounded border border-yellow-600">
             <div className="text-yellow-300 font-bold mb-1">SECURITY CHECKS</div>
 
@@ -804,7 +745,6 @@ export default function App() {
                 </span>
               </div>
             )}
-
             {checks.includes('encryption') && currentCase.encryption && (
               <div>
                 <span className="text-yellow-400">CATEGORY:</span> {currentCase.category}<br />
@@ -812,35 +752,30 @@ export default function App() {
                 <span className="ml-1 px-2 py-0.5 rounded bg-gray-700 text-xs">{currentCase.encryption}</span>
               </div>
             )}
-
             {checks.includes('ip') && currentCase.sourceIP && (
               <div>
                 <span className="text-yellow-400">SOURCE IP: </span>
                 <span className="ml-1 px-2 py-0.5 rounded bg-gray-700 text-xs">{currentCase.sourceIP}</span>
               </div>
             )}
-
             {checks.includes('port') && currentCase.port && (
               <div>
                 <span className="text-yellow-400">PORT: </span>
                 <span className="ml-1 px-2 py-0.5 rounded bg-gray-700 text-xs">{currentCase.port}</span>
               </div>
             )}
-
             {checks.includes('hash') && currentCase.packetHash && (
               <div>
                 <span className="text-yellow-400">PKT HASH: </span>
                 <span className="ml-1 px-1 py-0.5 rounded bg-gray-700 text-xs break-all">{currentCase.packetHash}</span>
               </div>
             )}
-
             {checks.includes('employeeID') && currentCase.employeeID && (
               <div>
                 <span className="text-yellow-400">EMP ID: </span>
                 <span className="ml-1 px-2 py-0.5 rounded bg-gray-700 text-xs">{currentCase.employeeID}</span>
               </div>
             )}
-
             {checks.includes('ssl') && currentCase.sslExpiry && (
               <div>
                 <span className="text-yellow-400">SSL EXPIRY: </span>
@@ -848,54 +783,44 @@ export default function App() {
                 <div className="text-gray-500 text-xs mt-0.5">Today: 2087-06-15</div>
               </div>
             )}
-
             {checks.includes('voiceID') && (
               <div
                 className="mt-1 px-2 py-1 rounded text-xs"
                 style={{
-                  background: currentCase.voiceIDStatus === 'mismatch' ? '#7f1d1d40' : '#14532d40',
-                  border:     `1px solid ${currentCase.voiceIDStatus === 'mismatch' ? '#ef4444' : '#4ade80'}`,
+                  background: voiceMismatch ? '#7f1d1d40' : '#14532d40',
+                  border: `1px solid ${voiceMismatch ? '#ef4444' : '#4ade80'}`,
                 }}
               >
                 <span style={{ color: '#94a3b8' }}>VOICE ID: </span>
-                <span style={{ color: currentCase.voiceIDStatus === 'mismatch' ? '#fca5a5' : '#4ade80', fontWeight: 700 }}>
-                  {currentCase.voiceIDStatus === 'mismatch'
-                    ? '⚠ MISMATCH — ZORGON PATTERN'
-                    : '✓ PATTERN MATCH'}
+                <span style={{ color: voiceMismatch ? '#fca5a5' : '#4ade80', fontWeight: 700 }}>
+                  {voiceMismatch ? '⚠ MISMATCH — ZORGON PATTERN' : '✓ PATTERN MATCH'}
                 </span>
               </div>
             )}
-
             {!checks.some(c => ['authCode','encryption','ip','port','hash','employeeID','ssl','voiceID'].includes(c)) && (
               <div className="text-gray-400 text-xs italic">No additional security fields today.</div>
             )}
           </div>
         </div>
 
-        {/* Message content */}
         <div className="p-3 bg-gray-900 rounded border border-cyan-700 mb-4">
           <div className="text-cyan-300 text-xs mb-1">MESSAGE CONTENT:</div>
           <div className="text-gray-400 text-sm">{currentCase.content}</div>
         </div>
 
-        {/* Decision buttons */}
         <div className="flex gap-4">
-          <button
-            onClick={() => handleDecision('allow')}
+          <button onClick={() => handleDecision('allow')}
             className="flex-1 bg-green-600 hover:bg-green-500 hover:shadow-lg hover:shadow-green-500/50
               active:scale-95 active:bg-green-700 text-white font-bold py-4 px-6 rounded
               flex items-center justify-center gap-2 transition-all duration-150 text-lg
-              border-2 border-green-400 hover:border-green-300"
-          >
+              border-2 border-green-400 hover:border-green-300">
             <CheckCircle size={24} /> APPROVE
           </button>
-          <button
-            onClick={() => handleDecision('block')}
+          <button onClick={() => handleDecision('block')}
             className="flex-1 bg-red-600 hover:bg-red-500 hover:shadow-lg hover:shadow-red-500/50
               active:scale-95 active:bg-red-700 text-white font-bold py-4 px-6 rounded
               flex items-center justify-center gap-2 transition-all duration-150 text-lg
-              border-2 border-red-400 hover:border-red-300"
-          >
+              border-2 border-red-400 hover:border-red-300">
             <XCircle size={24} /> DENY
           </button>
         </div>
@@ -911,10 +836,9 @@ export default function App() {
           <Radio size={80} className="mx-auto mb-6 text-cyan-500 animate-pulse" />
           <h1 className="text-5xl font-bold mb-4 text-cyan-300">EARTH DEFENSE NET</h1>
           <p className="text-xl mb-8 text-gray-400">Transmission Control Officer</p>
-
           <div className="bg-gray-800 border-2 border-cyan-500 p-6 rounded-lg mb-8 text-left">
             <p className="mb-4">⚠ PRIORITY ALERT: Alien invasion detected. Hostile species attempting to breach Earth's defense network.</p>
-            <p className="mb-3">Your mission: Inspect incoming transmissions. New in Day 8 — the Voice ID system:</p>
+            <p className="mb-3">Your mission: Inspect all incoming transmissions. Each day adds new security protocols:</p>
             <ul className="text-sm mb-4 ml-4 space-y-1">
               <li>🛡️ Species &amp; DNA verification</li>
               <li>🔐 Authorization codes</li>
@@ -924,13 +848,12 @@ export default function App() {
               <li>🔗 Packet integrity checks</li>
               <li>👤 Employee authentication</li>
               <li>📜 SSL certificates</li>
-              <li>🔊 <strong className="text-cyan-300">NEW: Voice ID — Zorgon imposters can't hide their voice!</strong></li>
+              <li>🔊 <strong className="text-cyan-300">Day 8: Voice ID — Zorgon imposters can't hide their voice!</strong></li>
             </ul>
-            <p className="mb-3 text-yellow-400">⚡ Protocols rotate daily — each day new rules are added!</p>
+            <p className="mb-3 text-yellow-400">⚡ Protocols rotate daily — stay sharp and adapt!</p>
             <p className="mb-3 text-purple-400">💡 Click any protocol in the sidebar to learn what to look for.</p>
             <p className="text-red-400">⚠ Earth safety hits 0% → humanity falls.</p>
           </div>
-
           <button onClick={startGame}
             className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-4 px-8 rounded text-xl transition-colors shadow-lg shadow-cyan-500/50">
             BEGIN WATCH
@@ -954,9 +877,9 @@ export default function App() {
               <div>Earth Safety: {humanitySafety}%</div>
             </div>
             {day >= 15 && <p className="mt-4 text-yellow-400 font-bold">🏆 LEGENDARY DEFENDER — {day} days survived!</p>}
-            {day >= 10 && day < 15 && <p className="mt-4 text-green-400 font-bold">⭐ MASTER ANALYST — {day} days mastered!</p>}
+            {day >= 10 && day < 15 && <p className="mt-4 text-green-400 font-bold">⭐ MASTER ANALYST — {day} days!</p>}
             {day >= 7  && day < 10 && <p className="mt-4 text-green-400">✓ Advanced protocols learned! {day} days.</p>}
-            {day < 7  && <p className="mt-4 text-red-400">Training incomplete. Defenses breached on Day {day}.</p>}
+            {day < 7   && <p className="mt-4 text-red-400">Training incomplete. Defenses breached on Day {day}.</p>}
           </div>
           <button onClick={startGame}
             className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-4 px-8 rounded text-xl transition-colors shadow-lg shadow-cyan-500/50">
@@ -972,7 +895,7 @@ export default function App() {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-blue-900 to-gray-900 text-cyan-400 p-4 font-mono">
       <div className="max-w-7xl mx-auto">
 
-        {/* Header bar */}
+        {/* Header */}
         <div className="bg-gray-800 border-2 border-cyan-500 p-4 rounded-lg mb-4 flex items-center justify-between">
           <div className="flex items-center gap-5 flex-wrap">
             <div className="flex items-center gap-2">
@@ -981,19 +904,16 @@ export default function App() {
             </div>
             <div className="px-3 py-1 bg-blue-900 rounded text-sm">DAY {day}</div>
             <div className="text-sm">SCORE: {score}</div>
-            <div
-              className={`px-3 py-1 rounded font-bold text-sm transition-all duration-300 ${safetyShake ? 'animate-bounce' : ''} ${
-                safetyGlow === 'green' ? 'bg-green-600 text-white shadow-lg shadow-green-500/50' :
-                safetyGlow === 'red'   ? 'bg-red-600   text-white shadow-lg shadow-red-500/50'   :
-                humanitySafety < 30   ? 'bg-red-900 text-red-200 animate-pulse'  :
-                humanitySafety < 60   ? 'bg-yellow-900 text-yellow-200'           :
-                                         'bg-green-900 text-green-200'
-              }`}
-            >
+            <div className={`px-3 py-1 rounded font-bold text-sm transition-all duration-300 ${safetyShake ? 'animate-bounce' : ''} ${
+              safetyGlow === 'green' ? 'bg-green-600 text-white shadow-lg shadow-green-500/50' :
+              safetyGlow === 'red'   ? 'bg-red-600   text-white shadow-lg shadow-red-500/50'   :
+              humanitySafety < 30   ? 'bg-red-900 text-red-200 animate-pulse'   :
+              humanitySafety < 60   ? 'bg-yellow-900 text-yellow-200'            :
+                                       'bg-green-900 text-green-200'
+            }`}>
               🌍 EARTH SAFETY: {humanitySafety}%
             </div>
           </div>
-
           <div className="flex items-center gap-3">
             <div className="bg-purple-950 border border-purple-700 px-2 py-1 rounded text-xs">
               <div className="text-purple-300">🏆 BEST: Day {highestDay}</div>
@@ -1003,16 +923,12 @@ export default function App() {
               <Clock size={18} />
               <span className={timer < 20 ? 'text-red-400 animate-pulse' : ''}>{timer}s</span>
             </div>
-            <button
-              onClick={() => { const m = audio.toggleMute(); setIsMuted(m); }}
-              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded flex items-center gap-1 transition-colors text-sm"
-            >
+            <button onClick={() => { const m = audio.toggleMute(); setIsMuted(m); }}
+              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded flex items-center gap-1 transition-colors text-sm">
               {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
             </button>
-            <button
-              onClick={() => setIsPaused(true)}
-              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded flex items-center gap-1 transition-colors text-sm"
-            >
+            <button onClick={() => setIsPaused(true)}
+              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded flex items-center gap-1 transition-colors text-sm">
               ⏸ MENU
             </button>
           </div>
@@ -1044,7 +960,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Day-change banner */}
+        {/* Day-change banners */}
         {processedToday === 0 && day > 1 && day <= 8 && !feedback && (
           <div className="bg-yellow-900 border-2 border-yellow-500 p-3 rounded-lg mb-4 animate-pulse">
             <div className="text-lg font-bold text-yellow-300">⚡ NEW PROTOCOL — DAY {day}</div>
@@ -1069,62 +985,39 @@ export default function App() {
           </div>
         )}
 
-        {/* Three-column layout: portrait | transmission | sidebar */}
+        {/* Two-column layout: transmission (8) | sidebar (4) */}
         <div className="grid grid-cols-12 gap-4">
-
-          {/* Character portrait (3 cols) */}
-          <div className="col-span-3 flex flex-col items-center">
-            {currentCase && !feedback && (
-              <CharacterPortrait
-                character={getCharacter(currentCase.from)}
-                characterName={currentCase.from}
-                claimedSpecies={currentCase.species}
-                actualVoice={currentCase.voiceType}
-                isSpeaking={isSpeaking}
-                dialogueLine={currentCase.dialogueLine}
-                showVoiceID={voiceIDActive}
-              />
-            )}
+          <div className="col-span-8">
+            {renderCase()}
             {currentCase && (
               <div className="mt-2 text-center text-gray-500 text-xs">
-                Transmissions today: {processedToday}/3
+                Transmissions processed today: {processedToday}/3
               </div>
             )}
           </div>
 
-          {/* Main transmission panel (6 cols) */}
-          <div className="col-span-6">
-            {renderCase()}
-          </div>
-
-          {/* Protocol sidebar (3 cols) */}
-          <div className="col-span-3">
+          <div className="col-span-4">
             <div className="bg-gray-800 border-2 border-blue-500 p-4 rounded-lg sticky top-4">
               <div className="flex items-center gap-2 mb-2">
                 <BookOpen size={18} className="text-blue-400" />
                 <h3 className="text-base font-bold text-blue-400">PROTOCOLS</h3>
               </div>
               <div className="text-xs text-yellow-400 mb-3">{currentDayRules.title}</div>
-
-              <div className="space-y-2 text-xs max-h-[55vh] overflow-y-auto pr-1">
+              <div className="space-y-2 text-xs max-h-[60vh] overflow-y-auto pr-1">
                 {currentDayRules.rules.map((rule, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedInfo(rule.id)}
+                  <button key={idx} onClick={() => setSelectedInfo(rule.id)}
                     className="w-full text-left flex gap-2 p-2.5 rounded transition-all group
                       bg-gradient-to-b from-gray-700 to-gray-800 border-2 border-gray-600
                       shadow-[0_3px_0_0_rgba(75,85,99,1)]
                       hover:from-blue-700 hover:to-blue-800 hover:border-blue-500
                       hover:shadow-[0_3px_0_0_rgba(59,130,246,1)]
-                      active:translate-y-[2px] active:shadow-[0_1px_0_0_rgba(59,130,246,1)]"
-                  >
+                      active:translate-y-[2px] active:shadow-[0_1px_0_0_rgba(59,130,246,1)]">
                     <span className="text-blue-400 flex-shrink-0 group-hover:text-blue-200">▸</span>
                     <span className="text-gray-200 group-hover:text-white flex-1">{rule.text}</span>
                     <span className="opacity-50 group-hover:opacity-100 transition-opacity">ℹ️</span>
                   </button>
                 ))}
               </div>
-
               <div className="mt-3 bg-blue-950 border-2 border-blue-700 p-2.5 rounded-lg">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl animate-pulse">💡</span>
