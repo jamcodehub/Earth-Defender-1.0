@@ -4,7 +4,9 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: './', // Use relative paths for Electron
+  // '/' works for any HTTP server (Render, Netlify, Vercel, nginx…)
+  // The old './' was needed for Electron's file:// protocol only
+  base: '/',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
